@@ -1,0 +1,27 @@
+增：insert students,stuid=s123，score=89，1488821368327436809;
+    insert into student score values(10,50,89) where timestamp=1488821368327436809;
+
+    {   "insert into":{
+            "tbname":[
+            {name:"student"},
+             {"tag":"score","values":[10,50,89]}
+            ]
+        }
+    }
+{   "insert":{
+        "tbname":[
+        {name:"student"},
+         { "tag":"score","values":89,"timestamp":1488821368327436809}
+
+        ]
+    }
+}
+
+{   "insert":{
+        "tbname":[
+        {name:"student"},
+        {"tag":"score","values":89,"timestamp":1488821368327436809},
+        {"tag1":"stuid","values1":"s123","timestamp":1488821368327436809},
+        ]
+    }
+}

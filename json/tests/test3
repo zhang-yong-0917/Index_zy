@@ -1,0 +1,13 @@
+{ "select":{
+       "tbname":[
+       {
+           "name":"xxx",
+           "fields": "*",
+           "operation":[
+                {"where":"score>70","level":1 },
+                {"limit":1,"level":2}
+           ]
+        }
+       ]
+   }
+}
