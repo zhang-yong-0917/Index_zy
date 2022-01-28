@@ -1,5 +1,5 @@
 { "select":{
-       "tbname":[
+       "name":[
        {
            "name":"xxx",
            "fields": "*",

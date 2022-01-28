@@ -9,11 +9,12 @@
 #include <time.h>
 #include <list>
 #include <map>
+#include "index_create.h"
 
 #define MAX_LEVEL 30
 
 using namespace std;
-typedef list<char *> CHARLIST;
+typedef list<tuple_head* *> CHARLIST;
 
 typedef struct node {
     node *right;  //后驱

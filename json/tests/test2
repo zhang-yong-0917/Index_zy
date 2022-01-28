@@ -1,8 +1,9 @@
-   insert into tbname,tagKey=tagValue fieldKey=fieldValue timestamp;
+   insert into name,tagKey=tagValue fieldKey=fieldValue timestamp;
 
-增：insert students,stuid=s123，score=89，1488821368327436809;
+增：insert into students,stuid=s123，score=89，1488821368327436809;
+ insert into student (id,name,age) values(?,?,?);
 {   "insert":{
-        "tbname":[
+        "name":[
         {
             "name":xxx,//表名
             "tag"://表的tag域,
@@ -17,13 +18,13 @@
 
 
     <>必填        []可选
-查：select <fields> from <tbname> [ into_clause ] [ where_clause ]
+查：select <fields> from <name> [ into_clause ] [ where_clause ]
              [ group_by_clause ] [ order_by_clause ] [ limit_clause ]
              [ offset_clause ] [ slimit_clause ] [ soffset_clause ]
 
 说明：
 fields : 要查询的字段，查询全部可以用*
-tbname : 数据表名称
+name : 数据表名称
 into_clause : select ... into （可选）
 where_clause : where条件域（可选）
 group_by_clause : group by相关（可选）
@@ -41,7 +42,7 @@ soffset_clause : soffset相关（可选）
      select * from students where score > 70 group by ;
 
 { "select":{
-       "tbname":[
+       "name":[
        {
            "name":xxx,
            "fields":*,
@@ -60,15 +61,15 @@ soffset_clause : soffset相关（可选）
 
 
 
-删：delete from <tbname> [where_clause]
+删：delete from <name> [where_clause]
 说明：
-tbname : 表名称
+name : 表名称
 where_clause : where条件（可选）
 
 例子：delete from students;
 {
     "delete":{
-         "tbname":[
+         "name":[
          {
              "name":xxx
           }
@@ -80,7 +81,7 @@ where_clause : where条件（可选）
 例子： delete from students where stuid='s123' and time=1488820352594964019;
 { "delete":{
 
-       "tbname":[
+       "name":[
            {
             "name":xxx,
             "operation"：[
@@ -97,7 +98,7 @@ where_clause : where条件（可选）
 
 总结：
 { "insert/delete/select":{
-       "tbname":[
+       "name":[
             { "name":xxx,
               "fields":*,
               "operation"：[
