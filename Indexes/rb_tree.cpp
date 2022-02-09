@@ -2,7 +2,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 #include "rb_tree.h"
+#include "sql.h"
 
 #define rb_parent(r)   ((r)->parent)
 #define rb_color(r) ((r)->color)
@@ -12,7 +14,54 @@
 #define rb_set_red(r)  do { (r)->color = RED; } while (0)
 #define rb_set_parent(r,p)  do { (r)->parent = (p); } while (0)
 #define rb_set_color(r,c)  do { (r)->color = (c); } while (0)
+static rbtree_result_timestamp* result;
 
+
+
+
+
+
+/**
+ * 存入表的结构在map中
+ */
+void set_map_node(char* database_tablename,sql_operation* sql) {
+
+    map_node.insert(pair<char*, sql_operation* >(database_tablename, sql));    //把skip list放进map中 //pair是将2个数据组合成一组数据，当需要这样的需求时就可以使用pair
+}
+/**
+ * 查找要插入数据的表的结构，生成Node,方便数据的插入
+ */
+sql_operation *get_map_node(char* database_tablename) {
+    map<char*, sql_operation *>::iterator iter;
+    iter= map_node.find(database_tablename);
+    if(iter != map_node.end())//判断是否为空
+        return iter->second;
+    return NULL;
+}
+/**
+ * 初始化红黑树
+ */
+RBRoot *rbTree_init(char* database_tablename) {
+
+    RBRoot *rbRoot;
+    rbRoot = create_rbtree();
+    rbtree_tableMap.insert(pair<char*, RBRoot *>(database_tablename, rbRoot));    //把skip list放进map中 //pair是将2个数据组合成一组数据，当需要这样的需求时就可以使用pair
+    rbRoot->database_tablename = database_tablename;
+
+    return rbRoot;
+}
+/**
+ * 从map中查找红黑树
+ * @param database_tablename
+ * @return
+ */
+RBRoot *find_rbTree(char* database_tablename) {
+    map<char*, RBRoot *>::iterator iter;
+    iter= rbtree_tableMap.find(database_tablename);
+    if(iter != rbtree_tableMap.end())//判断是否为空
+        return iter->second;
+    return NULL;
+}
 /*
  * 创建红黑树，返回"红黑树的根"！
  */
@@ -20,6 +69,7 @@ RBRoot* create_rbtree()
 {
     RBRoot *root = (RBRoot *)malloc(sizeof(RBRoot));
     root->node = NULL;
+    root->rbhead= nullptr;
 
     return root;
 }
@@ -31,7 +81,8 @@ static void preorder(RBTree tree)
 {
     if(tree != NULL)
     {
-        printf("%d ", tree->key);
+        printf("tag:%d \n", tree->tag_values->columnname);
+        printf("values:%d \n", tree->tag_values->datalist->value);
         preorder(tree->left);
         preorder(tree->right);
     }
@@ -50,7 +101,8 @@ static void inorder(RBTree tree)
     if(tree != NULL)
     {
         inorder(tree->left);
-        printf("%d ", tree->key);
+        printf("tag:%d \n", tree->tag_values->columnname);
+        printf("values:%d \n", tree->tag_values->datalist->value);
         inorder(tree->right);
     }
 }
@@ -70,7 +122,8 @@ static void postorder(RBTree tree)
     {
         postorder(tree->left);
         postorder(tree->right);
-        printf("%d ", tree->key);
+        printf("tag:%d \n", tree->tag_values->columnname);
+        printf("values:%d \n", tree->tag_values->datalist->value);
     }
 }
 
@@ -83,42 +136,229 @@ void postorder_rbtree(RBRoot *root)
 /*
  * (递归实现)查找"红黑树x"中键值为key的节点
  */
-static Node* search(RBTree x, Type key)
+static rbtree_result_timestamp*  search(RBTree x, char* tag,char* dest,TokenType symbol)
 {
-    if (x==NULL || x->key==key)
-        return x;
+    if (x==NULL) perror("[error] rbtree node is null\n");
+    switch (symbol) {
+//        GE,                   //>=
+//                GT,                   //>
+//                EQ,                   //==
+//                LE,                   //<=
+//                LT,                   //<
+        case Assignment: { //=
+            while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+            {
+                x->tag_values= x->tag_values->nextcolumn;
+            }//判断tag是否存在
 
-    if (key < x->key)
-        return search(x->left, key);
-    else
-        return search(x->right, key);
-}
-int rbtree_search(RBRoot *root, Type key)
-{
-    if (root)
-        return search(root->node, key)? 0 : -1;
-}
+            if (strcmp(x->tag_values->columnname,tag)==0) {
+                //判断是否属于同一个 tag下的dest
+                if (x->tag_values->datalist->value ==NULL){
 
-/*
- * (非递归实现)查找"红黑树x"中键值为key的节点
- */
-static Node* iterative_search(RBTree x, Type key)
-{
-    while ((x!=NULL) && (x->key!=key))
-    {
-        if (key < x->key)
-            x = x->left;
-        else
-            x = x->right;
+                    return result;
+                }
+
+                if (x->tag_values->datalist->value == dest)   {
+                    //因为值相同的放同一个链表里面
+                    while(x->tag_values->datalist!=NULL) {
+                        rbtree_result_timestamp *swap = (rbtree_result_timestamp *) malloc(sizeof(rbtree_result_timestamp));
+                        swap->timestamp = x->tag_values->datalist->timestamp;
+                        result->next = swap;
+                        x->tag_values->datalist=x->tag_values->datalist->next;
+                    }
+                }
+                else  if (dest < x->tag_values->datalist->value){
+                    x = x->left;
+                    result=search(x, tag,dest, symbol);
+                }
+                else{x = x->right;result=search(x, tag,dest, symbol); }
+            }
+            else perror("[error] the tag  is not exit\n");
+
+            break;
+        }
+        case GT: {//>
+            while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+            {
+                x->tag_values= x->tag_values->nextcolumn;
+            }//判断tag是否存在
+
+            if (strcmp(x->tag_values->columnname,tag)==0) {
+
+                if (x->tag_values->datalist->value ==NULL){
+//                x = x->left;
+//                result=search(x, tag,dest, symbol);
+
+                    return result;
+                }
+
+                if (x->tag_values->datalist->value > dest)   {
+                    rbtree_result_timestamp* swap;
+                    swap->timestamp=x->tag_values->datalist->timestamp;
+                    result->next=swap;
+                }
+                else {x = x->right;result=search(x, tag,dest, symbol); }
+            }
+            else perror("[error] the tag  is not exit\n");
+            break;
+        }
+        case LT: {//<
+            while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+            {
+                x->tag_values= x->tag_values->nextcolumn;
+            }//判断tag是否存在
+
+            if (strcmp(x->tag_values->columnname,tag)==0) {
+                if (x->tag_values->datalist->value ==NULL){
+//                    x = x->left;
+//                    result=search(x, tag,dest, symbol);
+
+                    return result;
+                }
+
+                if (x->tag_values->datalist->value < dest)   {
+                    rbtree_result_timestamp* swap;
+                    swap->timestamp=x->tag_values->datalist->timestamp;
+                    result->next=swap;
+                }
+                else if(dest < x->tag_values->datalist->value){
+                    x = x->left;
+                    result=search(x, tag,dest, symbol);
+                }
+            }
+            else perror("[error] the tag  is not exit\n");
+            break;
+        }
+        case GE: {//>=
+            while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+            {
+                x->tag_values= x->tag_values->nextcolumn;
+            }//判断tag是否存在
+
+            if (strcmp(x->tag_values->columnname,tag)==0) {
+                if (x->tag_values->datalist->value ==NULL){
+//                        x = x->left;
+//                        result=search(x, tag,dest, symbol);
+
+                    return result;
+                }
+
+                if (x->tag_values->datalist->value >= dest)   {
+                    //=
+                    if (x->tag_values->datalist->value == dest)
+                        while(x->tag_values->datalist!=NULL) {
+                            rbtree_result_timestamp *swap = (rbtree_result_timestamp *) malloc(sizeof(rbtree_result_timestamp));
+                            swap->timestamp = x->tag_values->datalist->timestamp;
+                            result->next = swap;
+                            x->tag_values->datalist=x->tag_values->datalist->next;
+                        }
+                    //>
+                    rbtree_result_timestamp* swap;
+                    swap->timestamp=x->tag_values->datalist->timestamp;
+                    result->next=swap;
+                } else{x = x->right;result=search(x, tag,dest, symbol); }
+            }
+            else perror("[error] the tag  is not exit\n");
+            break;
+        }
+        case LE: {//<=
+            while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+            {
+                x->tag_values= x->tag_values->nextcolumn;
+            }//判断tag是否存在
+
+            if (strcmp(x->tag_values->columnname,tag)==0) {
+                if (x->tag_values->datalist->value ==NULL){
+//                            x = x->left;
+//                            result=search(x, tag,dest, symbol);
+
+                    return result;
+                }
+
+                if (x->tag_values->datalist->value <= dest)   {
+
+                    if (x->tag_values->datalist->value == dest)
+                        while(x->tag_values->datalist!=NULL) {
+                            rbtree_result_timestamp *swap = (rbtree_result_timestamp *) malloc(sizeof(rbtree_result_timestamp));
+                            swap->timestamp = x->tag_values->datalist->timestamp;
+                            result->next = swap;
+                            x->tag_values->datalist=x->tag_values->datalist->next;
+                        }
+                    rbtree_result_timestamp* swap;
+                    swap->timestamp=x->tag_values->datalist->timestamp;
+                    result->next=swap;
+                }
+                else  if(dest < x->tag_values->datalist->value){
+                    x = x->left;
+                    result=search(x, tag,dest, symbol);
+                }
+            }
+            else perror("[error] the tag  is not exit\n");
+            break;
+        }
+
     }
 
-    return x;
+
+
+//                    while(x->tag_values->datalist!=NULL && x->tag_values->datalist->value!=dest){
+//                        if (key < x->key)
+//                            x = x->left;
+//                        else
+//                            x = x->right;
+//                    }
+//                    if (x==NULL || x->tag_values->columnname == tag)
+
+        return result;
+
+//    if (strcmp(tag,x->tag_values->columnname)==-1 )
+//        return search(x->left, tag,value);
+//    else
+//        return search(x->right, tag,value);
 }
-int iterative_rbtree_search(RBRoot *root, Type key)
+
+rbtree_result_timestamp* rbtree_search(RBRoot *root, char* tag,char* dest,TokenType symbol)
 {
     if (root)
-        return iterative_search(root->node, key) ? 0 : -1;
+        return search(root->node, tag,dest, symbol);
 }
+
+//
+///*
+// * (非递归实现)查找"红黑树x"中键值为key的节点
+// */
+//static Node* iterative_search(RBTree x,  char* tag,char* dest,char* symbol)
+//{
+//    if (x==NULL) perror("[error] rbtree node is null\n");
+//       if(symbol=="=") {
+//
+//
+//           while ((x->tag_values!=NULL) && (x->tag_values->columnname!=tag))
+//           {
+//               x->tag_values= x->tag_values->nextcolumn;
+//           }//判断tag是否存在
+//
+//           if (x->tag_values->columnname==tag)
+//           while(x->tag_values->datalist!=NULL && x->tag_values->datalist->value!=dest){
+//               if (key < x->key)
+//                   x = x->left;
+//               else
+//                   x = x->right;
+//           }
+//           else perror("[error] the tag  is not exit\n");
+//       }
+//           if (symbol==">")
+//                  if (symbol=="<")
+//                         if (symbol==">=")
+//                                if (symbol=="<=")
+//
+//    return x;
+//}
+//int iterative_rbtree_search(RBRoot *root, char* tag,char* dest,char* symbol)
+//{
+//    if (root)
+//        return iterative_search(root->node, tag, dest, symbol) ? 0 : -1;
+//}
 
 /*
  * 查找最小结点：返回tree为根结点的红黑树的最小结点。
@@ -133,7 +373,7 @@ static Node* minimum(RBTree tree)
     return tree;
 }
 
-int rbtree_minimum(RBRoot *root, int *val)
+int rbtree_minimum(RBRoot *root, char *val)
 {
     Node *node;
 
@@ -143,7 +383,7 @@ int rbtree_minimum(RBRoot *root, int *val)
     if (node == NULL)
         return -1;
 
-    *val = node->key;
+    val = node->tag_values->columnname;
     return 0;
 }
 
@@ -160,7 +400,7 @@ static Node* maximum(RBTree tree)
     return tree;
 }
 
-int rbtree_maximum(RBRoot *root, int *val)
+int rbtree_maximum(RBRoot *root, char *val)
 {
     Node *node;
 
@@ -170,7 +410,7 @@ int rbtree_maximum(RBRoot *root, int *val)
     if (node == NULL)
         return -1;
 
-    *val = node->key;
+    val = node->tag_values->columnname;
     return 0;
 }
 
@@ -397,7 +637,7 @@ static void rbtree_insert_fixup(RBRoot *root, Node *node)
     // 将根节点设为黑色
     rb_set_black(root->node);
 }
-
+///////////////////////////////////////////////////////////////////////////
 /*
  * 添加节点：将节点(node)插入到红黑树中
  *
@@ -405,39 +645,114 @@ static void rbtree_insert_fixup(RBRoot *root, Node *node)
  *     root 红黑树的根
  *     node 插入的结点        // 对应《算法导论》中的z
  */
+
+static void insert(RBTreeNode * rbnode,Node* node){
+
+    Node *y = NULL;
+    Node *x = rbnode;
+
+        // 1. 将红黑树当作一颗二叉查找树，将节点添加到二叉查找树中。
+        while (x != NULL)
+        {
+            y = x;
+
+//            tuple_column* swap=node->tag_values;
+            //找到对应的tag
+            while(x->tag_values->columnname!=node->tag_values->columnname && x->tag_values->columnname!=NULL ){
+                x->tag_values=x->tag_values->nextcolumn;
+//            swap->columnname=swap->nextcolumn->columnname;
+//            node->tag_values=node->tag_values->nextcolumn;
+
+//            if (swap==NULL){
+//                x->tag_values=x->tag_values->nextcolumn;
+//                swap=node->tag_values;
+//            }
+//            if (x->tag_values->columnname==NULL){
+//                x->tag_values=node->tag_values;
+//                break;
+//            }
+//            else x->tag_values=x->tag_values->nextcolumn;
+
+            }
+            //判断tag是否相等
+            if (x->tag_values->columnname==node->tag_values->columnname ){
+
+                if (x->tag_values->datalist->value ==NULL){
+                    x->tag_values->datalist->value=node->tag_values->datalist->value;
+                    x->tag_values->datalist->timestamp=node->tag_values->datalist->timestamp;
+                }
+                    //判断值是否相等
+                if (x->tag_values->datalist->value == node->tag_values->datalist->value){
+                    Node *a= (Node*)malloc(sizeof (Node));
+                    a->tag_values->datalist=node->tag_values->datalist;
+                        x->tag_values->datalist->next=a->tag_values->datalist;
+//                        swap->nextcolumn=NULL;//?
+                }
+
+                if (node->tag_values->datalist->value< x->tag_values->datalist->value)    {//小于
+                    if (node->tag_values->datalist->value > x->left->tag_values->datalist->value){
+                        Node *a= (Node*)malloc(sizeof (Node));
+                        a=node;
+                        a->left=x->left;
+                        a->right=x;
+                        a->parent=x->parent;
+                        return;
+                    } else{
+                        x = x->left;
+                        insert(x, node);
+                    }
+
+                }
+                else {
+                    if (node->tag_values->datalist->value < x->right->tag_values->datalist->value){
+                        Node *a= (Node*)malloc(sizeof (Node));
+                        a=node;
+                        a->right=x->right;
+                        a->left=x;
+                        a->parent=x->parent;
+                        return;
+                    }
+                    else{
+                        x = x->right;
+                        insert(x, node);
+                    }
+                }
+
+            }
+            if (x->tag_values->columnname==NULL) perror("这个tag不存在\n");
+            }
+
+
+        rb_parent(node) = y;
+
+        if (y != NULL)
+        {
+            if (strcmp(node->tag_values->datalist->value, y->tag_values->datalist->value)==-1)
+                y->left = node;                // 情况2：若“node所包含的值” < “y所包含的值”，则将node设为“y的左孩子”
+            else
+                y->right = node;            // 情况3：(“node所包含的值” >= “y所包含的值”)将node设为“y的右孩子”
+        }
+        else
+        {
+            rbnode = node;                // 情况1：若y是空节点，则将node设为根
+        }
+
+        // 2. 设置节点的颜色为红色
+        node->color = RED;
+        return;
+
+}
 static void rbtree_insert(RBRoot *root, Node *node)
 {
-    Node *y = NULL;
-    Node *x = root->node;
+    while(node->tag_values->columnname!=NULL) {
+        if (node) {
+            insert(root->node, node);
+        }
 
-    // 1. 将红黑树当作一颗二叉查找树，将节点添加到二叉查找树中。
-    while (x != NULL)
-    {
-        y = x;
-        if (node->key < x->key)
-            x = x->left;
-        else
-            x = x->right;
+        // 3. 将它重新修正为一颗二叉查找树
+        rbtree_insert_fixup(root, node);
+        node->tag_values=node->tag_values->nextcolumn;//进行下一列比较
     }
-    rb_parent(node) = y;
-
-    if (y != NULL)
-    {
-        if (node->key < y->key)
-            y->left = node;                // 情况2：若“node所包含的值” < “y所包含的值”，则将node设为“y的左孩子”
-        else
-            y->right = node;            // 情况3：(“node所包含的值” >= “y所包含的值”)将node设为“y的右孩子”
-    }
-    else
-    {
-        root->node = node;                // 情况1：若y是空节点，则将node设为根
-    }
-
-    // 2. 设置节点的颜色为红色
-    node->color = RED;
-
-    // 3. 将它重新修正为一颗二叉查找树
-    rbtree_insert_fixup(root, node);
 }
 
 /*
@@ -449,13 +764,14 @@ static void rbtree_insert(RBRoot *root, Node *node)
  *     left 是左孩子。
  *     right 是右孩子。
  */
-static Node* create_rbtree_node(Type key, Node *parent, Node *left, Node* right)
+static Node* create_rbtree_node(tuple_column* node, Node *parent, Node *left, Node* right)
 {
+
     Node* p;
 
     if ((p = (Node *)malloc(sizeof(Node))) == NULL)
         return NULL;
-    p->key = key;
+    p->tag_values = node;
     p->left = left;
     p->right = right;
     p->parent = parent;
@@ -474,23 +790,23 @@ static Node* create_rbtree_node(Type key, Node *parent, Node *left, Node* right)
  *     0，插入成功
  *     -1，插入失败
  */
-int insert_rbtree(RBRoot *root, Type key)
-{
-    Node *node;    // 新建结点
-
-    // 不允许插入相同键值的节点。
-    // (若想允许插入相同键值的节点，注释掉下面两句话即可！)
-    if (search(root->node, key) != NULL)
-        return -1;
-
-    // 如果新建结点失败，则返回。
-    if ((node=create_rbtree_node(key, NULL, NULL, NULL)) == NULL)
-        return -1;
-
-    rbtree_insert(root, node);
-
-    return 0;
-}
+//int insert_rbtree(RBRoot *root, Type key)
+//{
+//    Node *node;    // 新建结点
+//
+//    // 不允许插入相同键值的节点。
+//    // (若想允许插入相同键值的节点，注释掉下面两句话即可！)
+//    if (search(root->node, key) != NULL)
+//        return -1;
+//
+//    // 如果新建结点失败，则返回。
+//    if ((node=create_rbtree_node(key, NULL, NULL, NULL)) == NULL)
+//        return -1;
+//
+//    rbtree_insert(root, node);
+//
+//    return 0;
+//}
 
 /*
  * 红黑树删除修正函数
@@ -695,13 +1011,13 @@ void rbtree_delete(RBRoot *root, Node *node)
  *     tree 红黑树的根结点
  *     key 键值
  */
-void delete_rbtree(RBRoot *root, Type key)
-{
-    Node *z, *node;
-
-    if ((z = search(root->node, key)) != NULL)
-        rbtree_delete(root, z);
-}
+//void delete_rbtree(RBRoot *root, Type key)
+//{
+//    Node *z, *node;
+//
+//    if ((z = search(root->node, key,NULL,NULL,NULL)) != NULL)
+//        rbtree_delete(root, z);
+//}
 
 /*
  * 销毁红黑树
@@ -737,22 +1053,24 @@ void destroy_rbtree(RBRoot *root)
  *               -1，表示该节点是它的父结点的左孩子;
  *                1，表示该节点是它的父结点的右孩子。
  */
-static void rbtree_print(RBTree tree, Type key, int direction)
+static void rbtree_print(RBTree tree, tuple_column* tag_values, int direction)
 {
     if(tree != NULL)
     {
-        if(direction==0)    // tree是根节点
-            printf("%2d(B) is root\n", tree->key);
+        if(direction==0) {    // tree是根节点
+            printf("%2d(B) is root\n", tree->tag_values->columnname);
+            printf("%2d(B) is root\n", tree->tag_values->datalist->value);
+        }
         else                // tree是分支节点
-            printf("%2d(%s) is %2d's %6s child\n", tree->key, rb_is_red(tree)?"R":"B", key, direction==1?"right" : "left");
+            printf("%2d(%s) is %2d's %6s child\n",  tree->tag_values->columnname, rb_is_red(tree)?"R":"B", tree->tag_values->datalist->value, direction==1?"right" : "left");
 
-        rbtree_print(tree->left, tree->key, -1);
-        rbtree_print(tree->right,tree->key,  1);
+        rbtree_print(tree->left, tree->tag_values->nextcolumn, -1);
+        rbtree_print(tree->right,tree->tag_values->nextcolumn,  1);
     }
 }
 
 void print_rbtree(RBRoot *root)
 {
     if (root!=NULL && root->node!=NULL)
-        rbtree_print(root->node, root->node->key, 0);
+        rbtree_print(root->node, root->node->tag_values, 0);
 }

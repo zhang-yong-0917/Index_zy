@@ -1,2 +1,2 @@
 AUX_SOURCE_DIRECTORY(. DIR_TEST1_SRCS)
-add_executable ( Indexes ${DIR_TEST1_SRCS} rb_tree.cpp rb_tree.h Segment_Tree.cpp Segment_Tree.h rbtree_test.cpp index_create.cpp index_create.h sql.h sql.cpp)
+add_executable ( Indexes ${DIR_TEST1_SRCS} skip_list.cpp skip_list.h rb_tree.cpp rb_tree.h Segment_Tree.cpp Segment_Tree.h rbtree_test.cpp index_operation.cpp index_operation.h sql.h sql.cpp cprocess.cpp)
